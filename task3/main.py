@@ -1,3 +1,4 @@
+from itertools import count
 import numpy as np
 import cv2
 import datetime
@@ -12,14 +13,11 @@ class KalmanFilter:
         # process_var: process variance, represents uncertainty in the model
         # measurement_var: measurement variance, represents measurement noise
 
-        ### TODO
-        ### Change the model to constant acceleration model
-
         # Measurement Matrix
-        self.H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+        self.H = np.array([[1, 0, 0, 0, 0, 0], [0, 1, 0, 0, 0, 0]])
 
         # Process Covariance Matrix
-        self.Q = np.eye(4) * process_var
+        self.Q = np.eye(6) * process_var
 
         # Measurement Covariance Matrix
         self.R = np.array(
@@ -30,15 +28,19 @@ class KalmanFilter:
         )
 
         # Initial State Covariance Matrix
-        self.P = np.eye(4)
+        self.P = np.eye(6)
 
         # Initial State
-        self.x = np.zeros(4)
+        self.x = np.zeros(6)
 
     def predict(self, dt):
         # State Transition Matrix
-        A = np.array([[1, 0, dt, 0], [0, 1, 0, dt], [0, 0, 1, 0], [0, 0, 0, 1]])
-
+        A = np.array([[1, 0, dt,  0, 0, 0], 
+                      [0, 1, 0, dt, 0, 0], 
+                      [0, 0, 1, 0, 0, 0], 
+                      [0, 0, 0, 1, dt, 0], 
+                      [0, 0, 0, 0, 1, dt], 
+                      [0, 0, 0, 0, 0, 1]])
         # Predict the next state
         self.x = A @ self.x
         self.P = A @ self.P @ A.T + self.Q
@@ -52,13 +54,29 @@ class KalmanFilter:
         S = self.H @ self.P @ self.H.T + self.R
         K = self.P @ self.H.T @ np.linalg.inv(S)
         self.x += K @ y
-        self.P = (np.eye(4) - K @ self.H) @ self.P
+        self.P = (np.eye(6) - K @ self.H) @ self.P
 
 
 def draw_uncertainty(kf, img):
-    ### TODO
-    ### Draw uncertainty
-    pass
+    P = kf.P
+
+    x, y = kf.x[:2]
+
+    # Calculate the standard deviations
+    std_x = np.sqrt(P[0, 0])
+    std_y = np.sqrt(P[1, 1])
+    std_vx = np.sqrt(P[2, 2])
+    std_vy = np.sqrt(P[3, 3])
+
+    half_length_x = np.sqrt(5.991) * max(std_x, std_vx)  # 5.991 is the chi-squared value for 90% confidence in a 1D Gaussian distribution
+    half_length_y = np.sqrt(5.991) * max(std_y, std_vy)
+
+    top_left = (int(x - half_length_x), int(y - half_length_y))
+    bottom_right = (int(x + half_length_x), int(y + half_length_y))
+
+    color = (0, 255, 0)
+    thickness = 1
+    cv2.rectangle(img, top_left, bottom_right, color, thickness)
 
 
 class ClickReader:
@@ -126,6 +144,7 @@ class PredefinedClickReader:
     def run(self, observation_generator):
         for dt, observation in observation_generator:
             self.kf.predict(dt)
+            print(observation)
             if observation is not None:
                 self.kf.update(observation)
                 cv2.circle(
@@ -150,9 +169,9 @@ class PredefinedClickReader:
 def parabola_generator():
     for x in range(0, 500, 1):
         if np.random.rand(1)[0] > 0.5:
-            yield 1, None
+            yield 0.1, None
         else:
-            yield 1, np.array(
+            yield 0.1, np.array(
                 [
                     x + np.random.randn(1)[0] * np.sqrt(1e2),
                     x * (500 - x) / 250 + np.random.randn(1)[0] * np.sqrt(4e2),
@@ -175,16 +194,65 @@ class VideoReader:
         cv2.namedWindow(window_name)
         self.fps = fps
 
+    # Finds red ball in the frame.
+    def find_position(self, frame, prev=None):
+        hsv_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+        value_normalized = hsv_frame[:, :, 2] / 255.0
+
+        print(np.mean(value_normalized))
+
+        if prev is not None and (prev - np.mean(value_normalized)) > 0.02:
+            return None, prev
+
+
+        lower_red = np.array([0, 70, 50])
+        upper_red = np.array([10, 255, 255])
+        mask1 = cv2.inRange(hsv_frame, lower_red, upper_red)
+        lower_red = np.array([170, 70, 50])
+        upper_red = np.array([180, 255, 255])
+        mask2 = cv2.inRange(hsv_frame, lower_red, upper_red)
+        mask = mask1 + mask2
+        contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        if len(contours) == 0:
+            return None, np.mean(value_normalized)
+
+        cnt = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(cnt)
+        print("bounds", x, y, w, h)
+        measurement = [x + w/2, y + h/2]
+
+        return measurement, np.mean(value_normalized)
+
     def run(self):
-        ### TODO
-        ### Set initial position using the first frame
+        thr = 1e4
+        self.kf.P[2, 2] = thr
+        self.kf.P[3, 3] = thr
+        self.kf.P[4, 4] = thr
+        self.kf.P[5, 5] = thr
+        # Set initial position using the first frame
+        ret, frame = self.video.read()
+        if not ret:
+            return
+
+        initial_position, prev = self.find_position(frame)
+        if initial_position is not None:
+            self.kf.x[:2] = initial_position
+
         while True:
             ret, frame = self.video.read()
             if not ret:
                 break
-            ### TODO
-            ### Find the red ball in the frame
-            ### Use Kalman Filter to track the ball and predict its position
+
+            observed_position, prev = self.find_position(frame, prev)
+            if observed_position is not None:
+                self.kf.update(observed_position)
+                cv2.circle(frame, (int(observed_position[0]), int(observed_position[1])), 10, (0, 255, 0), -1)
+
+            self.kf.predict(1 / self.fps)
+            #if observed_position is None:
+            predicted_position = self.kf.x[:2]
+            cv2.circle(frame, (int(predicted_position[0]), int(predicted_position[1])), 10, (200, 255, 0), -1)
+
             cv2.imshow(self.window_name, frame)
             if cv2.waitKey(1) & 0xFF == 27:
                 break
@@ -207,12 +275,15 @@ if __name__ == "__main__":
         click_reader = ClickReader(process_var, measurement_var)
         click_reader.run()
     elif args.mode == "predefined":
-        ### TODO
-        ### Read parabola_generator and set measurement_var_x and measurement_var_y
+        process_var = 1e-3
+        measurement_var_x = 0.1
+        measurement_var_y = 0.1
 
-        predefinedclicker = PredefinedClickReader(0, ...)
+        predefinedclicker = PredefinedClickReader(
+            process_var, measurement_var_x, measurement_var_y
+        )
         predefinedclicker.run(parabola_generator())
     else:
         assert args.mode == "video"
-        video_reader = VideoReader(10, 10, "line.mp4")
+        video_reader = VideoReader(10, 10, "sinewave.mp4")
         video_reader.run()
