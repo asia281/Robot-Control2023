@@ -34,12 +34,12 @@ class KalmanFilter:
         self.x = np.zeros(6)
 
     def predict(self, dt):
-        # State Transition Matrix
+        # State Transition Matrix -- x, y, vx, vy, ax (const), ay (const)
         A = np.array([[1, 0, dt,  0, 0, 0], 
                       [0, 1, 0, dt, 0, 0], 
-                      [0, 0, 1, 0, 0, 0], 
-                      [0, 0, 0, 1, dt, 0], 
-                      [0, 0, 0, 0, 1, dt], 
+                      [0, 0, 1, 0, dt, 0], 
+                      [0, 0, 0, 1, 0, dt], 
+                      [0, 0, 0, 0, 1, 0], 
                       [0, 0, 0, 0, 0, 1]])
         # Predict the next state
         self.x = A @ self.x
@@ -58,25 +58,19 @@ class KalmanFilter:
 
 
 def draw_uncertainty(kf, img):
-    P = kf.P
-
     x, y = kf.x[:2]
+    confidence_factor = 1.96  # For 90% confidence assuming a normal distribution (so 95% * 95%)
 
-    # Calculate the standard deviations
-    std_x = np.sqrt(P[0, 0])
-    std_y = np.sqrt(P[1, 1])
-    std_vx = np.sqrt(P[2, 2])
-    std_vy = np.sqrt(P[3, 3])
+    std_x = np.sqrt(kf.P[0, 0])
+    std_y = np.sqrt(kf.P[1, 1])
 
-    half_length_x = np.sqrt(5.991) * max(std_x, std_vx)  # 5.991 is the chi-squared value for 90% confidence in a 1D Gaussian distribution
-    half_length_y = np.sqrt(5.991) * max(std_y, std_vy)
+    half_length_x = confidence_factor * std_x
+    half_length_y = confidence_factor * std_y
 
     top_left = (int(x - half_length_x), int(y - half_length_y))
     bottom_right = (int(x + half_length_x), int(y + half_length_y))
 
-    color = (0, 255, 0)
-    thickness = 1
-    cv2.rectangle(img, top_left, bottom_right, color, thickness)
+    cv2.rectangle(img, top_left, bottom_right, (0, 255, 0), 1)
 
 
 class ClickReader:
@@ -114,6 +108,8 @@ class ClickReader:
             )  # Blue color, filled circle
 
             img_draw = self.img.copy()
+
+            print(img_draw.shape)
 
             draw_uncertainty(self.kf, img_draw)
 
@@ -169,9 +165,9 @@ class PredefinedClickReader:
 def parabola_generator():
     for x in range(0, 500, 1):
         if np.random.rand(1)[0] > 0.5:
-            yield 0.1, None
+            yield 0.01, None
         else:
-            yield 0.1, np.array(
+            yield 0.01, np.array(
                 [
                     x + np.random.randn(1)[0] * np.sqrt(1e2),
                     x * (500 - x) / 250 + np.random.randn(1)[0] * np.sqrt(4e2),
@@ -224,12 +220,12 @@ class VideoReader:
         return measurement, np.mean(value_normalized)
 
     def run(self):
-        thr = 1e4
+        thr = 1e3
         self.kf.P[2, 2] = thr
         self.kf.P[3, 3] = thr
         self.kf.P[4, 4] = thr
         self.kf.P[5, 5] = thr
-        # Set initial position using the first frame
+
         ret, frame = self.video.read()
         if not ret:
             return
@@ -249,9 +245,10 @@ class VideoReader:
                 cv2.circle(frame, (int(observed_position[0]), int(observed_position[1])), 10, (0, 255, 0), -1)
 
             self.kf.predict(1 / self.fps)
-            #if observed_position is None:
-            predicted_position = self.kf.x[:2]
-            cv2.circle(frame, (int(predicted_position[0]), int(predicted_position[1])), 10, (200, 255, 0), -1)
+            # Comment the if below to draw predicted positions for all timesteps
+            if observed_position is None:
+                predicted_position = self.kf.x[:2]
+                cv2.circle(frame, (int(predicted_position[0]), int(predicted_position[1])), 10, (255, 255, 0), -1)
 
             cv2.imshow(self.window_name, frame)
             if cv2.waitKey(1) & 0xFF == 27:
