@@ -165,9 +165,9 @@ class PredefinedClickReader:
 def parabola_generator():
     for x in range(0, 500, 1):
         if np.random.rand(1)[0] > 0.5:
-            yield 0.01, None
+            yield 1, None
         else:
-            yield 0.01, np.array(
+            yield 1, np.array(
                 [
                     x + np.random.randn(1)[0] * np.sqrt(1e2),
                     x * (500 - x) / 250 + np.random.randn(1)[0] * np.sqrt(4e2),
@@ -244,7 +244,8 @@ class VideoReader:
                 self.kf.update(observed_position)
                 cv2.circle(frame, (int(observed_position[0]), int(observed_position[1])), 10, (0, 255, 0), -1)
 
-            self.kf.predict(1 / self.fps)
+            # dt is ~1/fps, it work well at line.mp4. To improve performance on sinewave.mp4, you can change it to 0.2.
+            self.kf.predict(0.04)
             # Comment the if below to draw predicted positions for all timesteps
             if observed_position is None:
                 predicted_position = self.kf.x[:2]
@@ -273,8 +274,10 @@ if __name__ == "__main__":
         click_reader.run()
     elif args.mode == "predefined":
         process_var = 1e-3
-        measurement_var_x = 0.1
-        measurement_var_y = 0.1
+        # you can decrese these values when decresing dt in parabola_generator (to look more like on the photo) 
+        # these values are taken from parabola generator 
+        measurement_var_x = 1e2
+        measurement_var_y = 4e2
 
         predefinedclicker = PredefinedClickReader(
             process_var, measurement_var_x, measurement_var_y
@@ -282,5 +285,5 @@ if __name__ == "__main__":
         predefinedclicker.run(parabola_generator())
     else:
         assert args.mode == "video"
-        video_reader = VideoReader(10, 10, "sinewave.mp4")
+        video_reader = VideoReader(10, 10, "line.mp4")
         video_reader.run()
