@@ -25,11 +25,11 @@ if __name__ == '__main__':
 
     # TODO: Set appropriate gains for the altitude PID controller
     pid_altitude = PID(
-        gain_prop = 0.1, gain_int = 0.01, gain_der = 0.001,
+        gain_prop = 2, gain_int = 0.9, gain_der = 0.9,
         sensor_period = drone_simulator.altitude_sensor_period
         )
 
     # Increase the number of iterations for longer simulation
-    for i in range(2000):
+    for i in range(3000):
         desired_thrust = pid_altitude.output_signal(desired_altitude, drone_simulator.measured_altitudes)
         drone_simulator.sim_step(desired_thrust)
