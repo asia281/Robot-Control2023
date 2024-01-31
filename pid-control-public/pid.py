@@ -10,6 +10,7 @@ class PID:
 
     # TODO: implement function which computes the output signal
     def output_signal(self, commanded_variable, sensor_readings):
+        print(sensor_readings)
         errors = [commanded_variable - sensor_readings[0], commanded_variable - sensor_readings[1]]
         self.integral += errors[0] * self.sensor_period
 
