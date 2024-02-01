@@ -34,19 +34,50 @@ class System:
 
 system = System()
 
-for _ in range(1000):
-    # Measure or estimate the current state
-    x = system.measure_state()
+# for _ in range(1000):
+#     # Measure or estimate the current state
+#     x = system.measure_state()
 
-    # Calculate the control input
-    u = -np.dot(K, x)
+#     # Calculate the control input
+#     u = -np.dot(K, x)
 
-    # Apply the control input to the system
-    system.apply_control(u)
+#     # Apply the control input to the system
+#     system.apply_control(u)
 
-    # Wait for the system to react before next iteration
-    # (This could be a time delay in a real-time system)
-    time.sleep(0.01)
+#     # Wait for the system to react before next iteration
+#     # (This could be a time delay in a real-time system)
+#     time.sleep(0.01)
 
-    # Print the current state
-    system.print_state()
+#     # Print the current state
+#     system.print_state()
+
+import matplotlib.pyplot as plt
+
+for Q_value in [1, 10, 100]:
+    for R_value in [1, 10, 100]:
+        Q = np.array([[Q_value, 0], [0, Q_value]])
+        R = np.array([[R_value]])
+
+        # Recompute LQR controller gain for new Q and R
+        K, S, E = ctrl.lqr(A, B, Q, R)
+
+        # Simulate the system with LQR controller
+        states = []
+        for _ in range(1000):
+            x = system.measure_state()
+            u = -np.dot(K, x)
+            system.apply_control(u)
+            states.append(x.flatten())
+
+            # Wait for the system to react before next iteration
+            time.sleep(0.01)
+
+        # Plot state trajectory
+        states = np.array(states)
+        plt.plot(states[:, 0], states[:, 1], label=f'Q={Q_value}, R={R_value}')
+
+plt.xlabel('State x1')
+plt.ylabel('State x2')
+plt.title('State Trajectory for Different Q and R Values')
+plt.legend()
+plt.show()

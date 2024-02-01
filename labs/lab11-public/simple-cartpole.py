@@ -127,8 +127,16 @@ def print_state(state, name):
     )
 
 
-def linearize(): # TODO maybe add some parameters to this function
+def linearize(theta, theta_dot, x, x_dot): # TODO maybe add some parameters to this function
     # TODO: implement this function
+    theta_double = (TOTAL_MASS * GRAVITY * np.sin(theta) - np.cos(theta) * (FORCE_MAG + POLE_MASS_LENGTH * theta_dot**2 * sp.sin(theta)))
+    theta_double /= (4/3) * TOTAL_MASS - POLE_MASS * np.cos(theta)**2
+
+    x_double = (FORCE_MAG + POLE_MASS_LENGTH * (theta_dot**2 * np.sin(theta) - theta_double * np.cos(theta)))
+    x_double /= TOTAL_MASS
+
+    state = [x, x_dot, theta, theta_dot]
+    control_input = F
     A = np.array( #TODO: fill in the matrix
         [
             [0, 0, 0, 0],
@@ -145,7 +153,7 @@ def linearize(): # TODO maybe add some parameters to this function
             [0],
         ]
     )
-    return A, B
+	return A, B
 
 
 def no_force():
@@ -165,8 +173,8 @@ def controlled():
     pole = CartPoleModel(initial_cart_position=-3)
     state = pole.state()
     A, B = linearize()
-    Q = np.diag([0,0,0,0]) #TODO: fill in the matrix (vector)
-    R = [0] # TODO: fill in the matrix (one value)
+    Q = np.diag([1,1,1,1]) #TODO: fill in the matrix (vector)
+    R = [1] # TODO: fill in the matrix (one value)
     K = control.lqr(A, B, Q, R)[0]
     print("K", K)
     for i in range(1300):
