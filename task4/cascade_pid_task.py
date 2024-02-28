@@ -24,12 +24,12 @@ if __name__ == '__main__':
         )
 
     # TODO: Create necessary PID controllers using PID class
-    # outer_loop_pid = PID(
-    #     gain_prop=0.12,
-    #     gain_int=0,
-    #     gain_der=0.7,
-    #     sensor_period=drone_simulator.altitude_sensor_period
-    # )
+    outer_loop_pid = PID(
+        gain_prop=0.12,
+        gain_int=0,
+        gain_der=0.7,
+        sensor_period=drone_simulator.altitude_sensor_period
+    )
 
     inner_loop_pid = PID(
         gain_prop=1,
@@ -45,7 +45,7 @@ if __name__ == '__main__':
         acceleration_reading = [drone_simulator.data.sensor("body_linacc").data[2] - 9.81, acceleration_reading[0]] # Only interested in z-direction
 
         # Outer loop control: Control acceleration based on altitude
-        # desired_acceleration = outer_loop_pid.output_signal(desired_altitude, drone_simulator.measured_altitudes)
+        desired_acceleration = outer_loop_pid.output_signal(desired_altitude, drone_simulator.measured_altitudes)
         
         # Inner loop control: Control thrust based on acceleration
         desired_thrust = inner_loop_pid.output_signal(0, acceleration_reading)
